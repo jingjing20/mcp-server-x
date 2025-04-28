@@ -5,6 +5,8 @@ import { z } from "zod";
 const AMAP_API_KEY = "2e645bee34ad494cfbd9baceccb351d0";
 const WEATHER_API_BASE = "https://restapi.amap.com/v3/weather/weatherInfo";
 const DRIVING_API_BASE = "https://restapi.amap.com/v5/direction/driving";
+const GEOCODE_API_BASE = "https://restapi.amap.com/v3/geocode/geo";
+const DISTRICT_API_BASE = "https://restapi.amap.com/v3/config/district";
 
 // 天气接口响应类型
 interface WeatherResponse {
@@ -65,6 +67,44 @@ interface DrivingStep {
   step_distance: string;
 }
 
+// 地理编码接口响应类型
+interface GeoCodeResponse {
+  status: string;
+  info: string;
+  infocode: string;
+  count: string;
+  geocodes: GeoCode[];
+}
+
+interface GeoCode {
+  formatted_address: string;
+  country: string;
+  province: string;
+  citycode: string;
+  city: string;
+  district: string;
+  adcode: string;
+  location: string;
+  level: string;
+}
+
+// 城市区域接口响应类型
+interface DistrictResponse {
+  status: string;
+  info: string;
+  infocode: string;
+  count: string;
+  districts: District[];
+}
+
+interface District {
+  citycode: string;
+  adcode: string;
+  name: string;
+  level: string;
+  districts?: District[];
+}
+
 // 请求高德API的通用函数
 async function makeAMapRequest<T>(url: string): Promise<T | null> {
   try {
@@ -77,6 +117,42 @@ async function makeAMapRequest<T>(url: string): Promise<T | null> {
     console.error("Error making AMap request:", error);
     return null;
   }
+}
+
+// 地理编码：地址转坐标
+async function getLocationByAddress(address: string): Promise<{ location: string; formatted_address: string } | null> {
+  const url = `${GEOCODE_API_BASE}?key=${AMAP_API_KEY}&address=${encodeURIComponent(address)}`;
+  const response = await makeAMapRequest<GeoCodeResponse>(url);
+
+  if (!response || response.status !== "1" || !response.geocodes || response.geocodes.length === 0) {
+    return null;
+  }
+
+  return {
+    location: response.geocodes[0].location,
+    formatted_address: response.geocodes[0].formatted_address
+  };
+}
+
+// 获取城市编码
+async function getCityCode(cityName: string): Promise<string | null> {
+  // 先尝试用地理编码API
+  const url = `${GEOCODE_API_BASE}?key=${AMAP_API_KEY}&address=${encodeURIComponent(cityName)}`;
+  const response = await makeAMapRequest<GeoCodeResponse>(url);
+
+  if (response && response.status === "1" && response.geocodes && response.geocodes.length > 0) {
+    return response.geocodes[0].adcode;
+  }
+
+  // 如果找不到，尝试使用行政区域查询
+  const districtUrl = `${DISTRICT_API_BASE}?key=${AMAP_API_KEY}&keywords=${encodeURIComponent(cityName)}&subdistrict=0`;
+  const districtResponse = await makeAMapRequest<DistrictResponse>(districtUrl);
+
+  if (districtResponse && districtResponse.status === "1" && districtResponse.districts && districtResponse.districts.length > 0) {
+    return districtResponse.districts[0].adcode;
+  }
+
+  return null;
 }
 
 // 格式化天气数据
@@ -97,11 +173,11 @@ function formatWeatherForecast(forecast: WeatherForecast): string {
 }
 
 // 格式化路线规划数据
-function formatDrivingRoute(drivingData: DrivingResponse): string {
+function formatDrivingRoute(drivingData: DrivingResponse, originName: string, destName: string): string {
   const route = drivingData.route;
   const path = route.paths[0]; // 取第一条路径
 
-  const originDestInfo = `从 ${route.origin} 到 ${route.destination}`;
+  const originDestInfo = `从 ${originName} 到 ${destName}`;
   const basicInfo = `总距离: ${(parseInt(path.distance) / 1000).toFixed(1)}公里 | 预计打车费用: ${route.taxi_cost}元`;
 
   const stepsFormatted = path.steps.map((step, index) => {
@@ -123,10 +199,24 @@ server.tool(
   "get-weather",
   "获取中国城市天气预报",
   {
-    city: z.string().describe("城市编码，如北京:110000，上海:310000"),
+    city: z.string().describe("城市名称，如北京、上海、广州等"),
   },
   async ({ city }: { city: string }) => {
-    const weatherUrl = `${WEATHER_API_BASE}?key=${AMAP_API_KEY}&city=${city}&extensions=all`;
+    // 根据城市名称获取城市编码
+    const cityCode = await getCityCode(city);
+
+    if (!cityCode) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `无法找到城市 "${city}" 的编码，请检查城市名称是否正确`,
+          },
+        ],
+      };
+    }
+
+    const weatherUrl = `${WEATHER_API_BASE}?key=${AMAP_API_KEY}&city=${cityCode}&extensions=all`;
     const weatherData = await makeAMapRequest<WeatherResponse>(weatherUrl);
 
     if (!weatherData) {
@@ -157,7 +247,7 @@ server.tool(
         content: [
           {
             type: "text",
-            text: `未找到城市 ${city} 的天气预报`,
+            text: `未找到城市 ${city} (${cityCode}) 的天气预报`,
           },
         ],
       };
@@ -182,11 +272,37 @@ server.tool(
   "get-route",
   "获取驾车路线规划",
   {
-    origin: z.string().describe("起点坐标，格式：经度,纬度，如 116.481488,39.990464"),
-    destination: z.string().describe("终点坐标，格式：经度,纬度，如 116.403124,39.940693"),
+    origin: z.string().describe("起点位置，如北京南站、上海外滩等地点名称"),
+    destination: z.string().describe("终点位置，如北京西站、上海虹桥火车站等地点名称"),
   },
   async ({ origin, destination }: { origin: string, destination: string }) => {
-    const drivingUrl = `${DRIVING_API_BASE}?key=${AMAP_API_KEY}&origin=${origin}&destination=${destination}&strategy=0`;
+    // 获取起点坐标
+    const originGeo = await getLocationByAddress(origin);
+    if (!originGeo) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `无法找到地点 "${origin}" 的坐标，请提供更准确的地点名称`,
+          },
+        ],
+      };
+    }
+
+    // 获取终点坐标
+    const destGeo = await getLocationByAddress(destination);
+    if (!destGeo) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `无法找到地点 "${destination}" 的坐标，请提供更准确的地点名称`,
+          },
+        ],
+      };
+    }
+
+    const drivingUrl = `${DRIVING_API_BASE}?key=${AMAP_API_KEY}&origin=${originGeo.location}&destination=${destGeo.location}&strategy=0`;
     const drivingData = await makeAMapRequest<DrivingResponse>(drivingUrl);
 
     if (!drivingData) {
@@ -211,7 +327,7 @@ server.tool(
       };
     }
 
-    const formattedRoute = formatDrivingRoute(drivingData);
+    const formattedRoute = formatDrivingRoute(drivingData, originGeo.formatted_address, destGeo.formatted_address);
     const routeText = `驾车路线规划结果:\n\n${formattedRoute}`;
 
     return {

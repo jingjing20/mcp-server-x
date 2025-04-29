@@ -6,23 +6,12 @@ importers:
     specifiers:
       '@modelcontextprotocol/sdk': ^1.4.0
       '@types/node': ^22.10.0
+      dotenv: ^16.5.0
       typescript: ^5.7.2
       zod: ^3.24.3
     dependencies:
       '@modelcontextprotocol/sdk': 1.10.2
-      zod: 3.24.3
-    devDependencies:
-      '@types/node': 22.15.3
-      typescript: 5.8.3
-
-  packages/weather-server-typescript:
-    specifiers:
-      '@modelcontextprotocol/sdk': ^1.4.0
-      '@types/node': ^22.10.0
-      typescript: ^5.7.2
-      zod: ^3.24.3
-    dependencies:
-      '@modelcontextprotocol/sdk': 1.10.2
+      dotenv: 16.5.0
       zod: 3.24.3
     devDependencies:
       '@types/node': 22.15.3
@@ -154,6 +143,11 @@ packages:
   /depd/2.0.0:
     resolution: {integrity: sha1-tpYWPMdXVg0JzyLMj60Vcbeedt8=}
     engines: {node: '>= 0.8'}
+    dev: false
+
+  /dotenv/16.5.0:
+    resolution: {integrity: sha512-m/C+AwOAr9/W1UOIZUo232ejMNnJAJtYQjUbHoNTBNTJSvqzzDh7vnrei3o3r3m9blf6ZoDkvcw0VmozNRFJxg==}
+    engines: {node: '>=12'}
     dev: false
 
   /dunder-proto/1.0.1:

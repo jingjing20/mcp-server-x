@@ -1,8 +1,11 @@
+import dotenv from 'dotenv';
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 
-const AMAP_API_KEY = "2e645bee34ad494cfbd9baceccb351d0";
+dotenv.config();
+
+const AMAP_API_KEY = process.env.AMAP_API_KEY;
 const WEATHER_API_BASE = "https://restapi.amap.com/v3/weather/weatherInfo";
 const DRIVING_API_BASE = "https://restapi.amap.com/v5/direction/driving";
 const GEOCODE_API_BASE = "https://restapi.amap.com/v3/geocode/geo";

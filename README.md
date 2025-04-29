@@ -1,5 +1,3 @@
-# Quickstart Resources
+# 开发一个简单的 mcp 服务
 
-A repository of servers and clients from the following Model Context Protocol tutorials:
-- [Quickstart](https://modelcontextprotocol.io/quickstart) – a simple MCP weather server
-- [Building MCP clients](https://modelcontextprotocol.io/tutorials/building-a-client) – an LLM-powered chatbot MCP client
+> 请你仔细参考 @weather-server-typescript  中的关于 mcp 的开发规则，可以完全参考这个目录。再帮我实现一个提供 查询天气、和规划路线两个工具的 mcp 服务，文件夹名为 china-weather-map。查询天气从这个接口拿数据：@https://restapi.amap.com/v3/weather/weatherInfo?key=2e645bee34ad494cfbd9baceccb351d0&city=110000&extensions=all ，规划路线从这个接口拿数据：@https://restapi.amap.com/v5/direction/driving?key=2e645bee34ad494cfbd9baceccb351d0&origin=116.481488,39.990464&destination=116.403124,39.940693&strategy=0
